@@ -102,7 +102,7 @@ class Framework_Filesystem
     //
     // If $src is a file, just copy it promptly
     //
-    if (is_file($src)) {
+    if (is_file($src) || is_link($src)) {
       if (!@copy($src, $dst)) {
         SystemEvent::raise(SystemEvent::INFO, "Could not copy file. [SRC={$src}] [DST={$dst}]", __METHOD__);
         return false;
@@ -113,7 +113,7 @@ class Framework_Filesystem
     try {
       foreach (new Framework_FilesystemFilterIterator(
                  new RecursiveIteratorIterator(
-                   new RecursiveDirectoryIterator($src),
+                   new RecursiveDirectoryIterator($src, FilesystemIterator::SKIP_DOTS),
                    RecursiveIteratorIterator::SELF_FIRST, // Because we need to create parent dir before start copying its children
                    RecursiveIteratorIterator::CATCH_GET_CHILD
                  ),
@@ -126,7 +126,7 @@ class Framework_Filesystem
       {
         $source = $entry->getRealPath();
         $dest = $dst . substr($source, strlen($src));
-        if ($entry->isFile()) {
+        if ($entry->isFile() || $entry->isLink()) {
           $ret = @copy($source, $dest);
         } elseif ($entry->isDir()) {
         	if (!file_exists($dest) && !@mkdir($dest, DEFAULT_DIR_MASK, true)) {
@@ -153,20 +153,20 @@ class Framework_Filesystem
    */
   static public function emptyDir($dir) {
     $ret = true;
-    $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir), RecursiveIteratorIterator::CHILD_FIRST);
+    $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
     foreach ($iterator as $path) {
-      if ($path->isDir()) {
-        if ($res = @rmdir($path->__toString())) {
-          SystemEvent::raise(SystemEvent::DEBUG, "Removed dir {$path->__toString()}", __METHOD__);
+      if ($path->isDir() && !$path->isLink()) {
+        if ($res = @rmdir($path->getPathName())) {
+          SystemEvent::raise(SystemEvent::DEBUG, "Removed dir {$path->getPathName()}", __METHOD__);
         } else {
-          SystemEvent::raise(SystemEvent::ERROR, "Couldn't remove dir {$path->__toString()}", __METHOD__);
+          SystemEvent::raise(SystemEvent::ERROR, "Couldn't remove dir {$path->getPathName()}", __METHOD__);
         }
         $ret = $ret & $res;
       } else {
-        if ($res = @unlink($path->__toString())) {
-          SystemEvent::raise(SystemEvent::DEBUG, "Removed file {$path->__toString()}", __METHOD__);
+        if ($res = @unlink($path->getPathName())) {
+          SystemEvent::raise(SystemEvent::DEBUG, "Removed file {$path->getPathName()}", __METHOD__);
         } else {
-          SystemEvent::raise(SystemEvent::ERROR, "Couldn't remove file {$path->__toString()}", __METHOD__);
+          SystemEvent::raise(SystemEvent::ERROR, "Couldn't remove file {$path->getPathName()}", __METHOD__);
         }
         $ret = $ret & $res;
       }
@@ -182,6 +182,6 @@ class Framework_Filesystem
    */
   static public function removeDir($dir)
   {
-    return (self::emptyDir($dir) && @rmdir($dir));
+    return (self::emptyDir($dir) && (@rmdir($dir) || @unlink($dir)));
   }
 }
