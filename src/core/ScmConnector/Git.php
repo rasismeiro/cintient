@@ -1,4 +1,5 @@
 <?php
+
 /*
  *
  *  Cintient, Continuous Integration made simple.
@@ -35,11 +36,12 @@
  */
 class ScmConnector_Git extends ScmConnectorAbstract implements ScmConnectorInterface
 {
+
   public function checkout()
   {
-    $command = "{$GLOBALS['settings'][SystemSettings::EXECUTABLE_GIT]} clone {$this->getRemote()} {$this->getLocal()}";
+    $command = (empty($this->_envVars) ? '' : $this->getEnvVars() . ' && ') . "{$GLOBALS['settings'][SystemSettings::EXECUTABLE_GIT]} clone {$this->getRemote()} {$this->getLocal()}";
     $proc = new Framework_Process();
-    $proc->setExecutable($command);
+    $proc->setExecutable($command, false);
     $proc->run();
     if (($return = $proc->getReturnValue()) != 0) {
       SystemEvent::raise(SystemEvent::ERROR, "Could not check out remote repository. [COMMAND=\"{$command}\"] [RET={$return}] [STDERR=\"{$proc->getStderr()}\"] [STDOUT=\"{$proc->getStdout()}\"]", __METHOD__);
@@ -69,7 +71,7 @@ class ScmConnector_Git extends ScmConnectorAbstract implements ScmConnectorInter
       return false;
     }
     #if DEBUG
-    SystemEvent::raise(SystemEvent::DEBUG, "Repository " . ($localRev!=$remoteRev?'':'not ') . "changed. [LOCAL={$localRev}] [REMOTE={$remoteRev}]", __METHOD__);
+    SystemEvent::raise(SystemEvent::DEBUG, "Repository " . ($localRev != $remoteRev ? '' : 'not ') . "changed. [LOCAL={$localRev}] [REMOTE={$remoteRev}]", __METHOD__);
     #endif
     return ($localRev != $remoteRev);
   }
@@ -80,21 +82,21 @@ class ScmConnector_Git extends ScmConnectorAbstract implements ScmConnectorInter
     // Pull up the local revision
     //
     /*
-    commit 15ab10edc93ca8a531e750ad300cbf91e5641a7b
-    Author: Pedro Mata-Mouros <pedro.matamouros@gmail.com>
-    Date:   Sun Sep 18 01:31:31 2011 +0100
+      commit 15ab10edc93ca8a531e750ad300cbf91e5641a7b
+      Author: Pedro Mata-Mouros <pedro.matamouros@gmail.com>
+      Date:   Sun Sep 18 01:31:31 2011 +0100
 
-    changes to README
+      changes to README
 
-    diff --git a/README b/README
-    index e69de29..9e3abf0 100644
-    --- a/README
-    +++ b/README
-    @@ -0,0 +1 @@
-    +Ola
-    \ No newline at end of file
-    */
-    $command = "{$GLOBALS['settings'][SystemSettings::EXECUTABLE_GIT]} --git-dir={$this->getLocal()}.git show";
+      diff --git a/README b/README
+      index e69de29..9e3abf0 100644
+      --- a/README
+      +++ b/README
+      @@ -0,0 +1 @@
+      +Ola
+      \ No newline at end of file
+     */
+    $command = (empty($this->_envVars) ? '' : $this->getEnvVars() . ' && ') . "{$GLOBALS['settings'][SystemSettings::EXECUTABLE_GIT]} --git-dir={$this->getLocal()}.git show";
     $lastline = exec($command, $output, $return);
     $outputLocal = implode("\n", $output);
     if ($return != 0 || !preg_match('/^commit ([\da-f]{40})$/m', $outputLocal, $matchesLocal)) {
@@ -110,10 +112,10 @@ class ScmConnector_Git extends ScmConnectorAbstract implements ScmConnectorInter
     // Check locally what is the current branch
     //
     /*
-    $ cat HEAD
-    ref: refs/heads/develop
-    */
-    $file = "{$this->getLocal()}.git/HEAD";
+      $ cat HEAD
+      ref: refs/heads/develop
+     */
+    $file = (empty($this->_envVars) ? '' : $this->getEnvVars() . ' && ') . "{$this->getLocal()}.git/HEAD";
     if (!preg_match('/^ref: ([\w\/\-_]+)$/', file_get_contents($file), $matches) || empty($matches[1])) {
       SystemEvent::raise(SystemEvent::ERROR, "Could not check local branch on HEAD file. [FILE={$file}] [LOCAL={$this->getLocal()}]", __METHOD__);
       return false;
@@ -124,12 +126,12 @@ class ScmConnector_Git extends ScmConnectorAbstract implements ScmConnectorInter
     // Pull up the remote revision
     //
     /*
-    $ git ls-remote git://github.com/matamouros/cintient.git refs/heads/develop
-    0fb200fffe72b7d1c4aaf1c0cbd35c0b070b33bb	refs/heads/develop
-    */
-    $command = "{$GLOBALS['settings'][SystemSettings::EXECUTABLE_GIT]} ls-remote {$this->getRemote()} {$branch}";
+      $ git ls-remote git://github.com/matamouros/cintient.git refs/heads/develop
+      0fb200fffe72b7d1c4aaf1c0cbd35c0b070b33bb	refs/heads/develop
+     */
+    $command = (empty($this->_envVars) ? '' : $this->getEnvVars() . ' && ') . "{$GLOBALS['settings'][SystemSettings::EXECUTABLE_GIT]} ls-remote {$this->getRemote()} {$branch}";
     $proc = new Framework_Process();
-    $proc->setExecutable($command);
+    $proc->setExecutable($command, false);
     $proc->run();
     if (($return = $proc->getReturnValue()) != 0 || !preg_match('/^([\da-f]{40})\s+/', $proc->getStdout(), $matchesRemote)) {
       SystemEvent::raise(SystemEvent::ERROR, "Could not check remote revision. [COMMAND=\"{$command}\"] [RET={$return}] [STDERR=\"{$proc->getStderr()}\"] [OUTPUT=\"{$proc->getStdout()}\"]", __METHOD__);
@@ -141,13 +143,11 @@ class ScmConnector_Git extends ScmConnectorAbstract implements ScmConnectorInter
   public function update(&$rev)
   {
     // We can't use "git --git-dir={$this->getLocal()} pull", it's wrong
-    
-    if (Framework_HostOs::isWindows()){
-        $drive = substr($this->getLocal(), 0,  strpos($this->getLocal(),':')+1);
-        $command = "$drive && cd {$this->getLocal()} && {$GLOBALS['settings'][SystemSettings::EXECUTABLE_GIT]} pull";
-    } else {
-        $command = "cd {$this->getLocal()} && {$GLOBALS['settings'][SystemSettings::EXECUTABLE_GIT]} pull";
+    $drive = '';
+    if (Framework_HostOs::isWindows()) {
+      $drive = substr($this->getLocal(), 0, strpos($this->getLocal(), ':') + 1) . ' && ';
     }
+    $command = (empty($this->_envVars) ? '' : $this->getEnvVars() . ' && ') . "$drive cd {$this->getLocal()} && {$GLOBALS['settings'][SystemSettings::EXECUTABLE_GIT]} pull";
     $proc = new Framework_Process();
     $proc->setExecutable($command, false); // false for no escapeshellcmd() (because of the ';')
     $proc->run();
@@ -161,5 +161,8 @@ class ScmConnector_Git extends ScmConnectorAbstract implements ScmConnectorInter
   }
 
   public function tag()
-  {}
+  {
+    
+  }
+
 }
