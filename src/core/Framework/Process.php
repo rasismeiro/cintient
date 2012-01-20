@@ -1,5 +1,4 @@
 <?php
-
 /*
  *
  *  Cintient, Continuous Integration made simple.
@@ -41,7 +40,6 @@
  */
 class Framework_Process extends Framework_BaseObject
 {
-
   protected $_executable;
   protected $_args;
   protected $_returnValue;
@@ -107,55 +105,34 @@ class Framework_Process extends Framework_BaseObject
     // TODO: We should be able to use is_executable, but it's not working
     // for relative executables in the PATH
     /*
-      if (!is_executable($filename)) {
+    if (!is_executable($filename)) {
       SystemEvent::raise(SystemEvent::ERROR, "Invalid executable specified. [FILENAME={$filename}]", __METHOD__);
       return false;
-      } */
+    }*/
     if ($escapeShellCmd) {
       $filename = escapeshellcmd($filename);
     }
     $this->_executable = $filename;
   }
 
-  public static function isRunning()
+  public function isRunning()
   {
-    $result = false;
-    $processInfo = self::_readPIDFile();
-    if (is_array($processInfo) && isset($processInfo['pid']) && isset($processInfo['time'])) {
-      if ($processInfo['time'] < 5) {
-        $result = true;
-      } else {
-        if (self::_isPIDRunning($processInfo['pid'])) {
-          $result = true;
-          self::refreshPIDFile($processInfo['pid']);
-        }
-      }
-    }
-    return $result;
-  }
-
-  public static function ifRunningThenExits()
-  {
-    $alreadyRunnig = self::isRunning();
-    if ($alreadyRunnig) {
-      exit;
+    if (Framework_HostOs::isWindows()) {
+      //(@pclose(popen("start /B ". $this->_executable, "r"));
     } else {
-      self::refreshPIDFile();
-    }
-  }
-
-  public static function refreshPIDFile($pid='')
-  {
-    $result = false;
-    $filename = self::_getPIDFile();
-    if ($filename) {
-      $pid = (int) empty($pid) ? getmypid() : $pid;
-      $data = $pid . '|' . date('H.i.s.d.m.Y');
-      if (false !== file_put_contents($filename, $data)) {
-        $result = true;
+      $output = array();
+      $ret = 1;
+      $cmd = 'ps ax | grep "' . $this->getExecutable() . '";';
+      @exec($cmd, $output, $ret);
+      if ($ret !== 0) {
+        SystemEvent::raise(SystemEvent::ERROR, "Could not query system for running executable. [EXECUTABLE={$this->getExecutable()}]", __METHOD__);
+        return true; // Seriously, don't assume it's not running. Better that the user fixes this first.
+      }
+      if (isset($output[0]) && !preg_match('/( ps ax \| | grep )/', $output[0])) {
+        return true;
       }
     }
-    return $result;
+    return false;
   }
 
   public function registerStdoutCallback($callback)
@@ -185,13 +162,13 @@ class Framework_Process extends Framework_BaseObject
     // Get windows run-in-background out of the way
     if (Framework_HostOs::isWindows() && $inBg) {
       SystemEvent::raise(SystemEvent::INFO, "Executing '{$this->getCmd()}'", __METHOD__);
-      return (bool) (@pclose(@popen("start /B " . $this->getCmd(), "r")) !== -1);
+      return (bool)(@pclose(@popen("start /B " . $this->getCmd(), "r")) !== -1);
     }
 
     $descriptorSpec = array(
-        0 => array("pipe", "r"), # STDIN
-        1 => array("pipe", "w"), # STDOUT
-        2 => array("pipe", "w"), # STDERR
+      0 => array("pipe", "r"), # STDIN
+      1 => array("pipe", "w"), # STDOUT
+      2 => array("pipe", "w"), # STDERR
     );
 
     $cmd = $this->getCmd() . ($inBg ? ' &' : '');
@@ -215,7 +192,8 @@ class Framework_Process extends Framework_BaseObject
     $first_exitcode = null;
 
     while (($buffer = fgets($pipes[1], 1024)) != null ||
-    ($errbuf = fgets($pipes[2], 1024)) != null) {
+           ($errbuf = fgets($pipes[2], 1024)) != null)
+    {
       if (!isset($flag)) {
         $pstatus = proc_get_status($ptr);
         if (!$pstatus['running']) {
@@ -247,7 +225,7 @@ class Framework_Process extends Framework_BaseObject
       $ret = proc_close($ptr);
     } else {
       if ((($first_exitcode + 256) % 256) == 255 &&
-              (($pstatus["exitcode"] + 256) % 256) != 255) {
+          (($pstatus["exitcode"] + 256) % 256) != 255) {
         $ret = $pstatus["exitcode"];
       } elseif (!strlen($first_exitcode)) {
         $ret = $pstatus["exitcode"];
@@ -286,7 +264,7 @@ class Framework_Process extends Framework_BaseObject
           break;
         // Fully silent
         case self::SILENT:
-          $outputSupression = ' > /dev/null 2>&1';
+      	  $outputSupression = ' > /dev/null 2>&1';
           break;
         // Just output stdout
         case self::STDOUT:
@@ -305,7 +283,7 @@ class Framework_Process extends Framework_BaseObject
     return true;
   }
 
-  /**
+	/**
    * Put quotes around the given String if necessary.
    *
    * <p>If the argument doesn't include spaces or quotes, return it
@@ -327,56 +305,4 @@ class Framework_Process extends Framework_BaseObject
       return $argument;
     }
   }
-
-  private static function _workersDir()
-  {
-    $result = false;
-    $dir = dirname(dirname(dirname(__FILE__))) . '/workers';
-    $dir = str_replace(array('\\', '//'), '/', $dir);
-    if (is_dir($dir) && is_writable($dir)) {
-      $result = $dir;
-    } else {
-      SystemEvent::raise(SystemEvent::ERROR, " The workers dir is not writable!", __METHOD__);
-    }
-    return $result;
-  }
-
-  private static function _getPIDFile()
-  {
-    $result = false;
-    $dir = self::_workersDir();
-    if ($dir) {
-      $result = $dir . '/' . strtolower(str_replace('.php', '.pid', basename(__FILE__)));
-    }
-    return $result;
-  }
-
-  private static function _readPIDFile()
-  {
-    $result = false;
-
-    $pidFile = self::_getPIDFile();
-    if ($pidFile && is_readable($pidFile)) {
-      list($pid, $_time) = explode('|', trim(file_get_contents($pidFile)));
-      list($H, $i, $s, $d, $m, $Y) = explode('.', $_time);
-      /* time in seconds */
-      $time = (int) (time() - mktime($H, $i, $s, $m, $d, $Y));
-      $result = array('pid' => $pid, 'time' => $time);
-    }
-
-    return $result;
-  }
-
-  private static function _isPIDRunning($pid)
-  {
-    $pid = (int) sprintf('%d', $pid);
-    if (0 === stripos(PHP_OS, 'win')) {
-      $cmd = "wmic PROCESS where (ProcessId=$pid) get ProcessId /VALUE | grep \"ProcessId=$pid\" -c";
-    } else {
-      $cmd = 'ps -eo pid | grep -E "^[ ]*' . $pid . '$" -c';
-    }
-    $result = ($pid > 0) ? (bool) sprintf('%d', shell_exec($cmd)) : false;
-    return $result;
-  }
-
 }

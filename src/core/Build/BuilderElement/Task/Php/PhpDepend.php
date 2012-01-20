@@ -98,10 +98,10 @@ class Build_BuilderElement_Task_Php_PhpDepend extends Build_BuilderElement
    */
   static public function create()
   {
-    $o = new self();        
+    $o = new self();
     // Let the user specify the include dirs, so that we don't end up
     // PhpDepend processing the whole project (and possibly 3rd party
-    // libs) by default    
+    // libs) by default
     $o->setIncludeDirs('${sourcesDir}');
     $o->setJdependChartFile($GLOBALS['project']->getReportsWorkingDir() . CINTIENT_PHPDEPEND_JDEPEND_CHART_FILENAME);
     $o->setOverviewPyramidFile($GLOBALS['project']->getReportsWorkingDir() . CINTIENT_PHPDEPEND_OVERVIEW_PYRAMID_FILENAME);
@@ -160,7 +160,7 @@ class Build_BuilderElement_Task_Php_PhpDepend extends Build_BuilderElement
   public function toPhp(Array &$context = array())
   {
     if (!$this->isActive()) {
-      return true;
+      return '';
     }
     $php              = '';
     $getFailedOnError = $this->getFailOnError() ? "true" : "false";

@@ -87,7 +87,6 @@ class ScmConnector_Git extends ScmConnectorAbstract implements ScmConnectorInter
       Date:   Sun Sep 18 01:31:31 2011 +0100
 
       changes to README
-
       diff --git a/README b/README
       index e69de29..9e3abf0 100644
       --- a/README
@@ -97,6 +96,7 @@ class ScmConnector_Git extends ScmConnectorAbstract implements ScmConnectorInter
       \ No newline at end of file
      */
     $command = (empty($this->_envVars) ? '' : $this->getEnvVars() . ' && ') . "{$GLOBALS['settings'][SystemSettings::EXECUTABLE_GIT]} --git-dir={$this->getLocal()}.git show";
+
     $lastline = exec($command, $output, $return);
     $outputLocal = implode("\n", $output);
     if ($return != 0 || !preg_match('/^commit ([\da-f]{40})$/m', $outputLocal, $matchesLocal)) {
@@ -116,6 +116,7 @@ class ScmConnector_Git extends ScmConnectorAbstract implements ScmConnectorInter
       ref: refs/heads/develop
      */
     $file = (empty($this->_envVars) ? '' : $this->getEnvVars() . ' && ') . "{$this->getLocal()}.git/HEAD";
+
     if (!preg_match('/^ref: ([\w\/\-_]+)$/', file_get_contents($file), $matches) || empty($matches[1])) {
       SystemEvent::raise(SystemEvent::ERROR, "Could not check local branch on HEAD file. [FILE={$file}] [LOCAL={$this->getLocal()}]", __METHOD__);
       return false;
@@ -130,6 +131,7 @@ class ScmConnector_Git extends ScmConnectorAbstract implements ScmConnectorInter
       0fb200fffe72b7d1c4aaf1c0cbd35c0b070b33bb	refs/heads/develop
      */
     $command = (empty($this->_envVars) ? '' : $this->getEnvVars() . ' && ') . "{$GLOBALS['settings'][SystemSettings::EXECUTABLE_GIT]} ls-remote {$this->getRemote()} {$branch}";
+
     $proc = new Framework_Process();
     $proc->setExecutable($command, false);
     $proc->run();
@@ -148,6 +150,7 @@ class ScmConnector_Git extends ScmConnectorAbstract implements ScmConnectorInter
       $drive = substr($this->getLocal(), 0, strpos($this->getLocal(), ':') + 1) . ' && ';
     }
     $command = (empty($this->_envVars) ? '' : $this->getEnvVars() . ' && ') . "$drive cd {$this->getLocal()} && {$GLOBALS['settings'][SystemSettings::EXECUTABLE_GIT]} pull";
+
     $proc = new Framework_Process();
     $proc->setExecutable($command, false); // false for no escapeshellcmd() (because of the ';')
     $proc->run();
